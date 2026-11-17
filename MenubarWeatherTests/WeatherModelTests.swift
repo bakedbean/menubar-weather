@@ -121,4 +121,83 @@ final class WeatherModelTests: XCTestCase {
         XCTAssertEqual(calls, 3)
         XCTAssertEqual(model.display, .placeholder)
     }
+
+    // MARK: Menu details
+
+    let t1 = Date(timeIntervalSince1970: 1_000_000)
+    let full = CurrentWeather(temperature: 48.3, weatherCode: 61, isDay: true, humidity: 62, windSpeed: 8.2,
+                              windDirection: 315, tomorrow: DailyForecast(weatherCode: 3, high: 55.4, low: 40.6))
+
+    func testSuccessPopulatesDetails() async {
+        let namer = FakePlaceNamer(name: "Brooklyn, NY")
+        let model = WeatherModel(location: FakeLocation(), weather: FakeWeather([.success(full)]), unit: .fahrenheit,
+                                 placeNamer: namer, now: { self.t1 })
+        await model.refresh()
+        XCTAssertEqual(model.details, WeatherDetails(
+            location: "Brooklyn, NY", conditions: "Light rain", wind: "Wind 8 mph NW",
+            humidity: "Humidity 62%", tomorrow: "Tomorrow: Overcast 55°/41°", updated: t1))
+    }
+
+    func testApproximateLocationIsLabeled() async {
+        let location = FakeLocation()
+        location.result = .success(Coordinate(latitude: 1, longitude: 2, source: .approximate))
+        let model = WeatherModel(location: location, weather: FakeWeather([.success(full)]), unit: .fahrenheit,
+                                 placeNamer: FakePlaceNamer(name: "Brooklyn, NY"))
+        await model.refresh()
+        XCTAssertEqual(model.details?.location, "Brooklyn, NY (approximate)")
+    }
+
+    func testPlaceNameLookedUpOncePerArea() async {
+        let location = FakeLocation()
+        location.result = .success(Coordinate(latitude: 40.7101, longitude: -74.0101))
+        let namer = FakePlaceNamer(name: "Brooklyn, NY")
+        let model = WeatherModel(location: location, weather: FakeWeather([.success(full), .success(full)]),
+                                 unit: .fahrenheit, placeNamer: namer)
+        await model.refresh()
+        location.result = .success(Coordinate(latitude: 40.7104, longitude: -74.0098))
+        await model.refresh()
+        XCTAssertEqual(namer.lookups, 1)
+        XCTAssertEqual(model.details?.location, "Brooklyn, NY")
+    }
+
+    func testMissingValuesHideRows() async {
+        let model = WeatherModel(location: FakeLocation(), weather: FakeWeather([.success(sunny)]), unit: .fahrenheit,
+                                 placeNamer: FakePlaceNamer(name: nil), now: { self.t1 })
+        await model.refresh()
+        XCTAssertEqual(model.details, WeatherDetails(
+            location: nil, conditions: "Clear sky", wind: nil, humidity: nil, tomorrow: nil, updated: t1))
+    }
+
+    func testFailureKeepsDetailsAndUpdatedTime() async {
+        var clock = t1
+        let weather = FakeWeather([.success(full), .failure(URLError(.notConnectedToInternet))])
+        let model = WeatherModel(location: FakeLocation(), weather: weather, unit: .fahrenheit,
+                                 retryDelays: [], placeNamer: FakePlaceNamer(name: "Brooklyn, NY"), now: { clock })
+        await model.refresh()
+        clock = t1.addingTimeInterval(900)
+        await model.refresh()
+        XCTAssertEqual(model.details?.updated, t1)
+    }
+
+    func testDeniedClearsDetails() async {
+        let location = FakeLocation()
+        let model = WeatherModel(location: location, weather: FakeWeather([.success(full)]), unit: .fahrenheit,
+                                 placeNamer: FakePlaceNamer(name: "Brooklyn, NY"))
+        await model.refresh()
+        location.result = .failure(LocationError.denied)
+        await model.refresh()
+        XCTAssertNil(model.details)
+    }
+}
+
+@MainActor
+final class FakePlaceNamer: PlaceNaming {
+    let name: String?
+    private(set) var lookups = 0
+    init(name: String?) { self.name = name }
+
+    func placeName(for coordinate: Coordinate) async -> String? {
+        lookups += 1
+        return name
+    }
 }

@@ -8,13 +8,27 @@ struct MenuDisplay: Equatable {
     static let locationDenied = MenuDisplay(symbolName: "location.slash", text: "--°")
 }
 
+/// Pre-formatted info rows for the menu; nil rows are hidden.
+struct WeatherDetails: Equatable {
+    var location: String?
+    let conditions: String
+    var wind: String?
+    var humidity: String?
+    var tomorrow: String?
+    let updated: Date
+}
+
 @MainActor
 final class WeatherModel: ObservableObject {
     @Published private(set) var display: MenuDisplay = .placeholder
+    @Published private(set) var details: WeatherDetails?
 
     private let location: LocationProviding
     private let weather: WeatherFetching
     private let unit: TemperatureUnit
+    private let placeNamer: PlaceNaming
+    private let now: @MainActor () -> Date
+    private var cachedPlace: (area: String, name: String)?
     private let refreshTimeout: Duration
     private let retryDelays: [Duration]
     private var isRefreshing = false
@@ -25,7 +39,11 @@ final class WeatherModel: ObservableObject {
 
     init(location: LocationProviding, weather: WeatherFetching, unit: TemperatureUnit,
          refreshTimeout: Duration = .seconds(45),
-         retryDelays: [Duration] = [.seconds(30), .seconds(60), .seconds(120)]) {
+         retryDelays: [Duration] = [.seconds(30), .seconds(60), .seconds(120)],
+         placeNamer: PlaceNaming = NoPlaceNames(),
+         now: @escaping @MainActor () -> Date = { Date() }) {
+        self.placeNamer = placeNamer
+        self.now = now
         self.location = location
         self.weather = weather
         self.unit = unit
@@ -43,21 +61,48 @@ final class WeatherModel: ObservableObject {
         retryTask = nil
 
         do {
-            let current = try await withTimeout(refreshTimeout) { [location, weather, unit] in
+            let (coordinate, current, place) = try await withTimeout(refreshTimeout) { [self] in
                 let coordinate = try await location.currentCoordinate()
-                return try await weather.currentWeather(at: coordinate, unit: unit)
+                let current = try await weather.currentWeather(at: coordinate, unit: unit)
+                return (coordinate, current, await placeName(for: coordinate))
             }
             display = MenuDisplay(
                 symbolName: WeatherIcon.symbolName(code: current.weatherCode, isDay: current.isDay),
                 text: formatTemperature(current.temperature)
             )
+            details = makeDetails(current, place: place, source: coordinate.source)
             retryAttempt = 0
         } catch LocationError.denied {
             display = .locationDenied
+            details = nil
             retryAttempt = 0
         } catch {
             scheduleRetry()
         }
+    }
+
+    /// Names are cached per ~1 km area (2 decimal places) so refreshes don't re-geocode.
+    private func placeName(for coordinate: Coordinate) async -> String? {
+        let area = String(format: "%.2f,%.2f", coordinate.latitude, coordinate.longitude)
+        if let cachedPlace, cachedPlace.area == area { return cachedPlace.name }
+        guard let name = await placeNamer.placeName(for: coordinate) else { return nil }
+        cachedPlace = (area, name)
+        return name
+    }
+
+    private func makeDetails(_ current: CurrentWeather, place: String?, source: LocationSource) -> WeatherDetails {
+        var wind: String?
+        if let speed = current.windSpeed, let direction = current.windDirection {
+            wind = WeatherText.wind(speed: speed, directionDegrees: direction, unit: unit)
+        }
+        return WeatherDetails(
+            location: place.map { WeatherText.location(name: $0, source: source) },
+            conditions: WeatherText.conditions(code: current.weatherCode),
+            wind: wind,
+            humidity: current.humidity.map(WeatherText.humidity),
+            tomorrow: current.tomorrow.map(WeatherText.tomorrow),
+            updated: now()
+        )
     }
 
     private func scheduleRetry() {
