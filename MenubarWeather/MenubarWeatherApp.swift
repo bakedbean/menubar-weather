@@ -12,7 +12,8 @@ struct MenubarWeatherApp: App {
                 store: UserDefaultsCoordinateStore()
             ),
             weather: OpenMeteoClient(),
-            unit: .preferred(for: .current)
+            unit: .preferred(for: .current),
+            placeNamer: AppleGeocoderPlaceNamer()
         )
         _model = StateObject(wrappedValue: model)
         model.startAutoRefresh()
@@ -20,6 +21,18 @@ struct MenubarWeatherApp: App {
 
     var body: some Scene {
         MenuBarExtra {
+            if let details = model.details {
+                if let location = details.location { Text(location) }
+                Text(details.conditions)
+                if let wind = details.wind { Text(wind) }
+                if let humidity = details.humidity { Text(humidity) }
+                if let tomorrow = details.tomorrow {
+                    Divider()
+                    Text(tomorrow)
+                }
+                Divider()
+                Text("Updated \(details.updated.formatted(date: .omitted, time: .shortened))")
+            }
             Button("Refresh") { Task { await model.refresh() } }
             Divider()
             Button("Quit") { NSApp.terminate(nil) }
