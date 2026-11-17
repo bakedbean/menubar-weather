@@ -16,6 +16,8 @@ final class WeatherModel: ObservableObject {
     private let weather: WeatherFetching
     private let unit: TemperatureUnit
     private var isRefreshing = false
+    var refreshTimer: Timer?
+    var wakeObserver: NSObjectProtocol?
 
     init(location: LocationProviding, weather: WeatherFetching, unit: TemperatureUnit) {
         self.location = location
