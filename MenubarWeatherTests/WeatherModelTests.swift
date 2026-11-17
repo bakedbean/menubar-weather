@@ -84,4 +84,41 @@ final class WeatherModelTests: XCTestCase {
         XCTAssertEqual(calls, 1)
         XCTAssertEqual(model.display, MenuDisplay(symbolName: "sun.max.fill", text: "72°"))
     }
+
+    func testHungLocationTimesOutAndReleasesRefresh() async {
+        let location = FakeLocation()
+        location.suspends = true
+        let weather = FakeWeather([.success(sunny)])
+        let model = WeatherModel(location: location, weather: weather, unit: .fahrenheit,
+                                 refreshTimeout: .milliseconds(50), retryDelays: [])
+        await model.refresh()
+        XCTAssertEqual(model.display, .placeholder)
+
+        location.suspends = false
+        await model.refresh()
+        XCTAssertEqual(model.display, MenuDisplay(symbolName: "sun.max.fill", text: "72°"))
+        location.pending?.resume(throwing: LocationError.unavailable)
+    }
+
+    func testFailureSchedulesRetry() async throws {
+        let weather = FakeWeather([.failure(URLError(.notConnectedToInternet)), .success(sunny)])
+        let model = WeatherModel(location: FakeLocation(), weather: weather, unit: .fahrenheit,
+                                 retryDelays: [.milliseconds(20)])
+        await model.refresh()
+        XCTAssertEqual(model.display, .placeholder)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(model.display, MenuDisplay(symbolName: "sun.max.fill", text: "72°"))
+    }
+
+    func testRetriesStopAfterDelaysExhausted() async throws {
+        let failure = Result<CurrentWeather, Error>.failure(URLError(.notConnectedToInternet))
+        let weather = FakeWeather([failure, failure, failure, .success(sunny)])
+        let model = WeatherModel(location: FakeLocation(), weather: weather, unit: .fahrenheit,
+                                 retryDelays: [.milliseconds(10), .milliseconds(10)])
+        await model.refresh()
+        try await Task.sleep(for: .milliseconds(300))
+        let calls = await weather.callCount
+        XCTAssertEqual(calls, 3)
+        XCTAssertEqual(model.display, .placeholder)
+    }
 }

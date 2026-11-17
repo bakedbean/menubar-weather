@@ -16,6 +16,7 @@ final class LocationProvider: NSObject, LocationProviding, CLLocationManagerDele
     func currentCoordinate() async throws -> Coordinate {
         if manager.authorizationStatus == .notDetermined {
             await withCheckedContinuation { continuation in
+                authContinuation?.resume()
                 authContinuation = continuation
                 manager.requestWhenInUseAuthorization()
             }
@@ -25,7 +26,9 @@ final class LocationProvider: NSObject, LocationProviding, CLLocationManagerDele
         case .notDetermined: throw LocationError.unavailable
         default: break
         }
+        // A previous request abandoned by the caller's timeout is failed, not leaked.
         return try await withCheckedThrowingContinuation { continuation in
+            locationContinuation?.resume(throwing: LocationError.unavailable)
             locationContinuation = continuation
             manager.requestLocation()
         }
