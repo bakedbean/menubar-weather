@@ -21,7 +21,11 @@ struct MenubarWeatherApp: App {
             Button("Quit") { NSApp.terminate(nil) }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: model.display.symbolName)
+                if let icon = MenuBarIcon.image(for: model.display.symbolName) {
+                    Image(nsImage: icon)
+                } else {
+                    Image(systemName: model.display.symbolName)
+                }
                 Text(model.display.text)
             }
         }
