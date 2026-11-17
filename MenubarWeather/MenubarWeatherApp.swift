@@ -6,7 +6,11 @@ struct MenubarWeatherApp: App {
 
     init() {
         let model = WeatherModel(
-            location: LocationProvider(),
+            location: FallbackLocationProvider(
+                primary: LocationProvider(),
+                approximate: IPLocationProvider(),
+                store: UserDefaultsCoordinateStore()
+            ),
             weather: OpenMeteoClient(),
             unit: .preferred(for: .current)
         )
