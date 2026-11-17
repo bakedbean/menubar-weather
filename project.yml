@@ -1,0 +1,52 @@
+name: MenubarWeather
+options:
+  bundleIdPrefix: com.local
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+targets:
+  MenubarWeather:
+    type: application
+    platform: macOS
+    sources: [MenubarWeather]
+    info:
+      path: MenubarWeather/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: Menubar Weather
+        NSLocationUsageDescription: Menubar Weather uses your location to show local weather.
+        NSLocationWhenInUseUsageDescription: Menubar Weather uses your location to show local weather.
+    entitlements:
+      path: MenubarWeather/MenubarWeather.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.personal-information.location: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.local.MenubarWeather
+        ENABLE_HARDENED_RUNTIME: NO
+  MenubarWeatherTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [MenubarWeatherTests]
+    dependencies:
+      - target: MenubarWeather
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MenubarWeather.app/Contents/MacOS/MenubarWeather"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  MenubarWeather:
+    build:
+      targets:
+        MenubarWeather: all
+        MenubarWeatherTests: [test]
+    test:
+      targets: [MenubarWeatherTests]
