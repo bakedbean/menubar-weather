@@ -3,6 +3,9 @@ import CoreLocation
 /// One-shot location lookups via CLLocationManager; asks for permission on first use.
 @MainActor
 final class LocationProvider: NSObject, LocationProviding, CLLocationManagerDelegate {
+    // Coarser requests get deferred by the macOS location power saver and may never deliver.
+    nonisolated static let desiredAccuracy: CLLocationAccuracy = kCLLocationAccuracyHundredMeters
+
     private let manager = CLLocationManager()
     private var authContinuation: CheckedContinuation<Void, Never>?
     private var locationContinuation: CheckedContinuation<Coordinate, Error>?
@@ -10,7 +13,7 @@ final class LocationProvider: NSObject, LocationProviding, CLLocationManagerDele
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+        manager.desiredAccuracy = Self.desiredAccuracy
     }
 
     func currentCoordinate() async throws -> Coordinate {
