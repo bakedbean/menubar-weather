@@ -52,9 +52,12 @@ final class FallbackLocationProvider: LocationProviding {
             throw LocationError.denied
         } catch {}
 
-        if let saved = store.lastCoordinate { return saved }
+        if let saved = store.lastCoordinate {
+            return Coordinate(latitude: saved.latitude, longitude: saved.longitude, source: .lastKnown)
+        }
         do {
-            return try await approximate.currentCoordinate()
+            let rough = try await approximate.currentCoordinate()
+            return Coordinate(latitude: rough.latitude, longitude: rough.longitude, source: .approximate)
         } catch {
             throw LocationError.unavailable
         }

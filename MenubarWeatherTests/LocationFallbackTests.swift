@@ -30,7 +30,7 @@ final class FallbackLocationProviderTests: XCTestCase {
         let store = InMemoryCoordinateStore(); store.lastCoordinate = saved
         let ip = FakeLocation(); ip.result = .success(approximate)
         let coordinate = try await makeProvider(primary: primary, approximate: ip, store: store).currentCoordinate()
-        XCTAssertEqual(coordinate, saved)
+        XCTAssertEqual(coordinate, Coordinate(latitude: 41.0, longitude: -73.0, source: .lastKnown))
         primary.pending?.resume(throwing: LocationError.unavailable)
     }
 
@@ -39,7 +39,7 @@ final class FallbackLocationProviderTests: XCTestCase {
         let ip = FakeLocation(); ip.result = .success(approximate)
         let store = InMemoryCoordinateStore()
         let coordinate = try await makeProvider(primary: primary, approximate: ip, store: store).currentCoordinate()
-        XCTAssertEqual(coordinate, approximate)
+        XCTAssertEqual(coordinate, Coordinate(latitude: 40.0, longitude: -74.0, source: .approximate))
         XCTAssertNil(store.lastCoordinate, "approximate locations aren't saved as precise ones")
     }
 

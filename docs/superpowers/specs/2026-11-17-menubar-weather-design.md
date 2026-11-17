@@ -30,3 +30,9 @@ User picked 1.
 - Project generation method and file layout.
 - Exact code→symbol mapping table.
 - Unit tests for the weather-code mapping and API response decoding.
+
+## Addendum (2026-11-17): fallback location and menu details
+- **Location fallback (user picked):** macOS location with a 10 s limit → last precise fix (saved in UserDefaults) → approximate IP lookup (ipwho.is). Denial is never masked. A late precise fix is saved for next time.
+- **Menu (user approved):** disabled info rows, then Refresh / Quit:
+  location name ("Brooklyn, NY", with "(approximate)" / "(last known)" suffix; hidden if the lookup fails), conditions in words (from the WMO code), "Wind 8 mph NW" (mph with °F, km/h with °C), "Humidity 62%", "Tomorrow: Light rain 55°/41°" (local day via `timezone=auto`), "Updated 1:15 PM". Missing values hide their row.
+- Place names come from Apple's reverse geocoder and are looked up only when the coordinate changes (~1 km).
